@@ -12,33 +12,39 @@ extern char **environ;
 #define MAX_ARGS 100
 
 void execute_command(char *input) {
-    pid_t pid = fork();
+    char *args[MAX_ARGS];
+    char *token;
+    pid_t pid;
+    int status;
+    int i = 0; // Declare i at the beginning of the function
 
-    if (pid == -1) {
-        perror("fork");
-        return;
+    // Tokenize the input string into arguments
+    token = strtok(input, " ");
+    while (token != NULL && i < MAX_ARGS - 1) {
+        args[i++] = token;
+        token = strtok(NULL, " ");
     }
+    args[i] = NULL; // Null-terminate the array
 
-    if (pid == 0) {
-        char *args[MAX_ARGS];
-        char *token;
-        int i = 0;
-
-        // Tokenize the input string into arguments
-        token = strtok(input, " ");
-        while (token != NULL && i < MAX_ARGS - 1) {
-            args[i++] = token;
-            token = strtok(NULL, " ");
+    // Check if command exists in PATH
+    if (access(args[0], X_OK) == 0) {
+        // Command exists, fork and execute
+        pid = fork();
+        if (pid == -1) {
+            perror("fork");
+            return;
         }
-        args[i] = NULL; // Null-terminate the array
 
-        if (execve(args[0], args, environ) == -1) {
-            perror("./shell");
+        if (pid == 0) {
+            execve(args[0], args, environ);
+            perror("execve"); // If execve fails
             exit(EXIT_FAILURE);
+        } else {
+            waitpid(pid, &status, 0);
         }
     } else {
-        int status;
-        waitpid(pid, &status, 0);
+        // Command not found
+        fprintf(stderr, "Command not found: %s\n", args[0]);
     }
 }
 
@@ -55,8 +61,6 @@ void trim_input(char *input) {
 
 int main(void) {
     char input[MAX_INPUT_SIZE];
-    int times; // Declare times at the start
-    int i; // Declare i at the start
 
     while (1) {
         printf("#cisfun$ ");
@@ -78,32 +82,7 @@ int main(void) {
             continue;
         }
 
-        // Handle specific commands
-        if (strcmp(input, "/bin/ls") == 0) {
-            execute_command("/bin/ls");
-        } else if (strncmp(input, "/bin/ls", 8) == 0) {
-            times = 1; // Initialize times
-            if (strstr(input, "3 times")) {
-                times = 3;
-            } else if (strstr(input, "4 times")) {
-                times = 4;
-            }
-            for (i = 0; i < times; i++) {
-                execute_command("/bin/ls");
-            }
-        } else if (strncmp(input, "copy /bin/ls to hbtn_ls", 23) == 0) {
-            if (system("cp /bin/ls ./hbtn_ls") == 0) {
-                execute_command("./hbtn_ls /var");
-            } else {
-                perror("cp failed");
-            }
-        } else {
-            if (access(input, F_OK) == 0) {
-                execute_command(input);
-            } else {
-                fprintf(stderr, "./shell: No such file or directory\n");
-            }
-        }
+        execute_command(input);
     }
 
     return 0;
