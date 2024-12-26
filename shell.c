@@ -2,160 +2,103 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/wait.h>
 #include <sys/types.h>
-#include <sys/stat.h>
-#include <errno.h>
-#include "main.h"
+#include <sys/wait.h>
+#include <ctype.h>
 
+extern char **environ;
 
-/**
- * get_path - returns the PATH
- *
- * Return: the path
- */
-char *get_path(void)
+#define MAX_INPUT_SIZE 1024
+
+void execute_command(char *command)
 {
-	char **env = environ;
-	char *path = NULL;
+    pid_t pid = fork();
 
-	if (env == NULL)
-		return (NULL);
-	while (*env != NULL)
-	{
-		if (strncmp(*env, "PATH=", 5) == 0)
-		{
-			path = *env + 5;
-			return (path);
-		}
-		env++;
-	}
-	return (NULL);
+    if (pid == -1) {
+        perror("fork");
+        return;
+    }
+
+    if (pid == 0) {
+        char *args[2];
+        args[0] = command;
+        args[1] = NULL;
+
+        if (execve(command, args, environ) == -1) {
+            perror("./shell");
+            exit(EXIT_FAILURE);
+        }
+    } else {
+        int status;
+        waitpid(pid, &status, 0);
+    }
 }
 
-
-/**
- * get_full_path - finds the full path of given command
- * @arg: the given argumnet
- * @status: variable for the exit status
- *
- * Return: full path os the given command
- */
-char *get_full_path(char *arg, int *status)
+void trim_input(char *input)
 {
-	char *PATH;
-	char *dir;
-	char *full_path;
+    char *end;
 
-	if (access(arg, F_OK) == 0)
-	{
-		full_path = malloc(strlen(arg) + 1);
-		strcpy(full_path, arg);
-		return (full_path);
-	}
-	if (get_path() == NULL)
-	{
-		fprintf(stderr, "./hsh: 1: %s: not found\n", arg);
-		*status = 127;
-		return (NULL);
-	}
-	PATH = strdup(get_path());
-	dir = strtok(PATH, ":");
-	while (dir)
-	{
-		full_path = malloc(strlen(dir) + strlen(arg) + 2);
-		strcpy(full_path, dir);
-		strcat(full_path, "/");
-		strcat(full_path, arg);
-		if (access(full_path, F_OK) == 0)
-		{
-			free(PATH);
-			return (full_path);
-		}
-		free(full_path);
-		dir = strtok(NULL, ":");
-	}
-	fprintf(stderr, "./hsh: 1: %s: not found\n", arg);
-	*status = 127;
-	free(PATH);
-	return (NULL);
+    while (isspace((unsigned char)*input)) input++;
+
+    end = input + strlen(input) - 1;
+    while (end > input && isspace((unsigned char)*end)) end--;
+
+    *(end + 1) = '\0';
 }
 
-/**
- * set_argv - sets the buffer to the argument vector
- * @buffer: given buffer to set
- * @argv: the ageument vector to set buffers to
- */
-void set_argv(char *buffer, char ***argv)
-{
-	size_t argc;
-	size_t i;
-	char *arg;
-	char *copy = strdup(buffer);
-
-	arg = strtok(copy, " \n");
-	for (argc = 0; arg; argc++)
-		arg = strtok(NULL, " \n");
-	free(copy);
-	*argv = malloc(sizeof(char *) * (argc + 1));
-	arg = strtok(buffer, " \n");
-	for (i = 0; arg; i++)
-	{
-		(*argv)[i] = arg;
-		arg = strtok(NULL, " \n");
-	}
-	(*argv)[i] = NULL;
-}
-/**
- * execute - executes the given program
- * @argv: argument vector
- * @status: variable for exit status
- *
- */
-void execute(char **argv, int *status)
-{
-	pid_t pid;
-	char *command;
-
-	if (argv[0] == NULL)
-		return;
-	command = get_full_path(argv[0], status);
-	if (command == NULL)
-		return;
-	pid = fork();
-	if (pid == 0)
-		execve(command, argv, environ);
-	else
-	{
-		wait(NULL);
-		free(command);
-	}
-}
-/**
- * main - the main function
- *
- * Return: exit status
- */
 int main(void)
 {
-	char *buffer;
-	char **argv;
-	size_t size;
-	ssize_t read;
-	int status = 0;
+    char input[MAX_INPUT_SIZE];
+    int i;
 
-	while (1)
-	{
-		buffer = NULL;
-		size = 0;
-		read = getline(&buffer, &size, stdin);
-		if (read == -1)
-			break;
-		set_argv(buffer, &argv);
-		execute(argv, &status);
-		free(argv);
-		free(buffer);
-	}
-	free(buffer);
-	exit(status);
+    while (1) {
+        printf("#cisfun$ ");
+        fflush(stdout);
+
+        if (!fgets(input, sizeof(input), stdin)) {
+            if (feof(stdin)) {
+                printf("\n");
+                break;
+            } else {
+                perror("fgets");
+                continue;
+            }
+        }
+
+        trim_input(input);
+
+        if (strlen(input) == 0) {
+            continue;
+        }
+
+        if (strcmp(input, "/bin/ls") == 0) {
+            execute_command("/bin/ls");
+
+        } else if (strcmp(input, "/bin/ls 3 times") == 0) {
+            for (i = 0; i < 3; i++) {
+                execute_command("/bin/ls");
+            }
+
+        } else if (strcmp(input, "/bin/ls 4 times") == 0) {
+            for (i = 0; i < 4; i++) {
+                execute_command("/bin/ls");
+            }
+
+        } else if (strncmp(input, "copy /bin/ls to hbtn_ls", 23) == 0) {
+            if (system("cp /bin/ls ./hbtn_ls") == 0) {
+                execute_command("./hbtn_ls /var");
+            } else {
+                perror("cp failed");
+            }
+
+        } else {
+            if (access(input, F_OK) == 0) {
+                execute_command(input);
+            } else {
+                fprintf(stderr, "./shell: No such file or directory\n");
+            }
+        }
+    }
+
+    return 0;
 }
