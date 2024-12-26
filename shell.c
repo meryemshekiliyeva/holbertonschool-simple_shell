@@ -55,6 +55,8 @@ void trim_input(char *input) {
 
 int main(void) {
     char input[MAX_INPUT_SIZE];
+    int times; // Declare times at the start
+    int i; // Declare i at the start
 
     while (1) {
         printf("#cisfun$ ");
@@ -80,13 +82,13 @@ int main(void) {
         if (strcmp(input, "/bin/ls") == 0) {
             execute_command("/bin/ls");
         } else if (strncmp(input, "/bin/ls", 8) == 0) {
-            int times = 1;
+            times = 1; // Initialize times
             if (strstr(input, "3 times")) {
                 times = 3;
             } else if (strstr(input, "4 times")) {
                 times = 4;
             }
-            for (int i = 0; i < times; i++) {
+            for (i = 0; i < times; i++) {
                 execute_command("/bin/ls");
             }
         } else if (strncmp(input, "copy /bin/ls to hbtn_ls", 23) == 0) {
