@@ -2,111 +2,160 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/types.h>
 #include <sys/wait.h>
-#include <ctype.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <errno.h>
+#include "main.h"
 
-extern char **environ;
 
-#define MAX_INPUT_SIZE 1024
-#define MAX_ARGS 100
+/**
+ * get_path - returns the PATH
+ *
+ * Return: the path
+ */
+char *get_path(void)
+{
+	char **env = environ;
+	char *path = NULL;
 
-void print_env(void);
-char *find_command_in_path(char *command);
-void execute_command(char *input);
-void trim_input(char *input); // Function prototype
-
-// Function to trim newline character from input
-void trim_input(char *input) {
-    size_t len = strlen(input);
-    if (len > 0 && input[len - 1] == '\n') {
-        input[len - 1] = '\0'; // Replace newline with null terminator
-    }
+	if (env == NULL)
+		return (NULL);
+	while (*env != NULL)
+	{
+		if (strncmp(*env, "PATH=", 5) == 0)
+		{
+			path = *env + 5;
+			return (path);
+		}
+		env++;
+	}
+	return (NULL);
 }
 
-char *find_command_in_path(char *command) {
-    char *path = getenv("PATH");
-    char *token = strtok(path, ":");
-    char full_path[MAX_INPUT_SIZE];
 
-    while (token != NULL) {
-        snprintf(full_path, sizeof(full_path), "%s/%s", token, command);
-        if (access(full_path, X_OK) == 0) {
-            return strdup(full_path); // Return the full path if found
-        }
-        token = strtok(NULL, ":");
-    }
-    return NULL; // Command not found
+/**
+ * get_full_path - finds the full path of given command
+ * @arg: the given argumnet
+ * @status: variable for the exit status
+ *
+ * Return: full path os the given command
+ */
+char *get_full_path(char *arg, int *status)
+{
+	char *PATH;
+	char *dir;
+	char *full_path;
+
+	if (access(arg, F_OK) == 0)
+	{
+		full_path = malloc(strlen(arg) + 1);
+		strcpy(full_path, arg);
+		return (full_path);
+	}
+	if (get_path() == NULL)
+	{
+		fprintf(stderr, "./hsh: 1: %s: not found\n", arg);
+		*status = 127;
+		return (NULL);
+	}
+	PATH = strdup(get_path());
+	dir = strtok(PATH, ":");
+	while (dir)
+	{
+		full_path = malloc(strlen(dir) + strlen(arg) + 2);
+		strcpy(full_path, dir);
+		strcat(full_path, "/");
+		strcat(full_path, arg);
+		if (access(full_path, F_OK) == 0)
+		{
+			free(PATH);
+			return (full_path);
+		}
+		free(full_path);
+		dir = strtok(NULL, ":");
+	}
+	fprintf(stderr, "./hsh: 1: %s: not found\n", arg);
+	*status = 127;
+	free(PATH);
+	return (NULL);
 }
 
-void execute_command(char *input) {
-    char *args[MAX_ARGS];
-    char *token;
-    pid_t pid;
-    int status;
-    int i = 0;
-    char *command_path; // Declare here
+/**
+ * set_argv - sets the buffer to the argument vector
+ * @buffer: given buffer to set
+ * @argv: the ageument vector to set buffers to
+ */
+void set_argv(char *buffer, char ***argv)
+{
+	size_t argc;
+	size_t i;
+	char *arg;
+	char *copy = strdup(buffer);
 
-    // Tokenize the input string into arguments
-    token = strtok(input, " ");
-    while (token != NULL && i < MAX_ARGS - 1) {
-        args[i++] = token;
-        token = strtok(NULL, " ");
-    }
-    args[i] = NULL; // Null-terminate the array
-
-    // Check if the command exists in PATH
-    command_path = find_command_in_path(args[0]); // Now it's declared before usage
-    if (command_path != NULL) {
-        // Command exists, fork and execute
-        pid = fork();
-        if (pid == -1) {
-            perror("fork");
-            free(command_path);
-            return;
-        }
-
-        if (pid == 0) {
-            execve(command_path, args, environ);
-            perror("execve"); // If execve fails
-            exit(EXIT_FAILURE);
-        } else {
-            waitpid(pid, &status, 0);
-        }
-        free(command_path); // Free the allocated memory
-    } else {
-        // Command not found
-        fprintf(stderr, "./hsh: %s: not found\n", args[0]);
-    }
+	arg = strtok(copy, " \n");
+	for (argc = 0; arg; argc++)
+		arg = strtok(NULL, " \n");
+	free(copy);
+	*argv = malloc(sizeof(char *) * (argc + 1));
+	arg = strtok(buffer, " \n");
+	for (i = 0; arg; i++)
+	{
+		(*argv)[i] = arg;
+		arg = strtok(NULL, " \n");
+	}
+	(*argv)[i] = NULL;
 }
+/**
+ * execute - executes the given program
+ * @argv: argument vector
+ * @status: variable for exit status
+ *
+ */
+void execute(char **argv, int *status)
+{
+	pid_t pid;
+	char *command;
 
-int main(void) {
-    char input[MAX_INPUT_SIZE];
-
-    while (1) {
-        printf("#cisfun$ ");
-        fflush(stdout);
-
-        if (!fgets(input, sizeof(input), stdin)) {
-            if (feof(stdin)) {
-                printf("\n");
-                break;
-            } else {
-                perror("fgets");
-                continue;
-            }
-        }
-
-        // Trim input and handle empty input
-        trim_input(input);
-        if (strlen(input) == 0) {
-            continue;
-        }
-
-        // Execute the command
-        execute_command(input);
-    }
-
-    return 0;
+	if (argv[0] == NULL)
+		return;
+	command = get_full_path(argv[0], status);
+	if (command == NULL)
+		return;
+	pid = fork();
+	if (pid == 0)
+		execve(command, argv, environ);
+	else
+	{
+		wait(NULL);
+		free(command);
+	}
 }
+/**
+ * main - the main function
+ *
+ * Return: exit status
+ */
+int main(void)
+{
+	char *buffer;
+	char **argv;
+	size_t size;
+	ssize_t read;
+	int status = 0;
 
+	while (1)
+	{
+		buffer = NULL;
+		size = 0;
+		read = getline(&buffer, &size, stdin);
+		if (read == -1)
+			break;
+		set_argv(buffer, &argv);
+		execute(argv, &status);
+		free(argv);
+		free(buffer);
+	}
+	free(buffer);
+	exit(status);
+}
