@@ -32,6 +32,7 @@ int main(void)
         /* Tokenize the input */
         char *token;
         int i = 0;
+
         token = strtok(input, DELIM);
         while (token != NULL)
         {
@@ -41,7 +42,9 @@ int main(void)
         argv[i] = NULL;
 
         if (argv[0] == NULL)
+        {
             continue; /* Empty command */
+        }
 
         /* Check for exit command */
         if (strcmp(argv[0], "exit") == 0)
