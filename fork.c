@@ -29,9 +29,10 @@ int main(void)
             exit(EXIT_FAILURE);
         }
 
-        // Tokenize the input
-        char *token = strtok(input, DELIM);
+        /* Tokenize the input */
+        char *token;
         int i = 0;
+        token = strtok(input, DELIM);
         while (token != NULL)
         {
             argv[i++] = token;
@@ -40,24 +41,25 @@ int main(void)
         argv[i] = NULL;
 
         if (argv[0] == NULL)
-            continue; // Empty command
+            continue; /* Empty command */
 
-        // Check for exit command
+        /* Check for exit command */
         if (strcmp(argv[0], "exit") == 0)
         {
             free(input);
             exit(0);
         }
 
-        // Locate the command
-        char *command_path = find_command(argv[0]);
+        /* Locate the command */
+        char *command_path;
+        command_path = find_command(argv[0]);
         if (command_path == NULL)
         {
             printf("%s: command not found\n", argv[0]);
             continue;
         }
 
-        // Fork and execute
+        /* Fork and execute */
         pid = fork();
         if (pid == -1)
         {
@@ -67,15 +69,15 @@ int main(void)
         }
         if (pid == 0)
         {
-            // Child process
+            /* Child process */
             execve(command_path, argv, environ);
-            perror("execve"); // Only reached if execve fails
+            perror("execve"); /* Only reached if execve fails */
             free(input);
             exit(EXIT_FAILURE);
         }
         else
         {
-            // Parent process
+            /* Parent process */
             wait(&status);
         }
 
@@ -88,27 +90,32 @@ int main(void)
 
 char *find_command(char *command)
 {
-    char *path = getenv("PATH");
+    char *path;
+    char *path_copy;
+    char *dir;
+    char *full_path;
+
+    path = getenv("PATH");
     if (!path)
         return NULL;
 
-    char *path_copy = strdup(path);
-    char *dir = strtok(path_copy, ":");
-    char *full_path = malloc(MAX_INPUT);
+    path_copy = strdup(path);
+    full_path = malloc(MAX_INPUT);
 
+    dir = strtok(path_copy, ":");
     while (dir != NULL)
     {
         snprintf(full_path, MAX_INPUT, "%s/%s", dir, command);
         if (access(full_path, X_OK) == 0)
         {
             free(path_copy);
-            return full_path; // Command found
+            return full_path; /* Command found */
         }
         dir = strtok(NULL, ":");
     }
 
     free(path_copy);
     free(full_path);
-    return NULL; // Command not found
+    return NULL; /* Command not found */
 }
 
