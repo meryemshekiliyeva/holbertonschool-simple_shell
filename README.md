@@ -1,4 +1,4 @@
-# Simple Shell Project
+üq# Simple Shell Project
 
 ## Description
 The Simple Shell project is an implementation of a basic Unix shell. This shell allows users to execute commands, navigate the file system, and run programs in both interactive and non-interactive modes.
